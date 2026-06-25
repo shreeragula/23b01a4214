@@ -1,20 +1,67 @@
-import { useState, useEffect } from "react";
-import { fetchNotifications } from "../apis/notifications";
+import { useEffect, useState } from "react";
+import { getNotifications } from "../api/notifications";
+import { createLog } from "../api/logger";
 
-export function useNotifications() {
-  const [notifications, setNotifications] = useState([]);
-  const [total, setTotal] = useState(0);
+const typeWeight = {
+  Placement: 1,
+  Result: 2,
+  Event: 3,
+};
+
+export const useNotifications = () => {
+  const [items, setItems] = useState([]);
 
   useEffect(() => {
-    const load = async () => {
-      const data = await fetchNotifications();
-      setNotifications(data.notifications ?? []);
+    const fetchData = async () => {
+      try {
+        await createLog(
+          "frontend",
+          "info",
+          "hook",
+          "Loading notification feed"
+        );
+
+        const notifications = await getNotifications();
+
+        const orderedNotifications = [...notifications].sort(
+          (first, second) => {
+            const priorityDiff =
+              typeWeight[first.Type] -
+              typeWeight[second.Type];
+
+            if (priorityDiff !== 0) {
+              return priorityDiff;
+            }
+
+            return (
+              new Date(second.Timestamp) -
+              new Date(first.Timestamp)
+            );
+          }
+        );
+
+        setItems(orderedNotifications.slice(0, 10));
+
+        await createLog(
+          "frontend",
+          "info",
+          "hook",
+          "Notification feed loaded successfully"
+        );
+      } catch {
+        await createLog(
+          "frontend",
+          "error",
+          "hook",
+          "Unable to load notifications"
+        );
+      }
     };
 
-    load();
-  }, [notifications]);
+    fetchData();
+  }, []);
 
-  const totalPages = 0;
-
-  return { notifications, total, totalPages, loading: false, error: true };
-}
+  return {
+    notifications: items,
+  };
+};
